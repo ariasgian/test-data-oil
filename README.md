@@ -17,7 +17,6 @@ etl/
     pipeline.py           # Main ETL pipeline script
     extract_data.py       # Data extraction utilities
 geo/
-    wellspublic.csv       # Well location data
 data/
     raw/                  # Raw downloaded data
     processed/            # Cleaned and processed data
