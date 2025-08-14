@@ -1,4 +1,4 @@
--- Total de petróleo (oil) y gas en West Virginia últimos 12 meses
+-- Total oil and gas in West Virginia last 12 months
 SELECT
     'Oil' AS product,
     SUM(production) AS total_volume
@@ -13,14 +13,14 @@ FROM gas_production
 WHERE county = 'WV'
   AND year_month >= date('now', '-12 months');
 
--- Condado con mayor número de pozos
+-- County with the highest number of wells
 SELECT county, COUNT(*) AS well_count
 FROM wells_by_county
 GROUP BY county
 ORDER BY well_count DESC
 LIMIT 1;
 
--- Promedio de producción de petróleo por pozo
+-- Average oil production per well
 SELECT AVG(total_oil) AS avg_oil_per_well
 FROM (
     SELECT year_month, SUM(production) AS total_oil
@@ -28,10 +28,38 @@ FROM (
     GROUP BY well_id
 );
 
--- Promedio de producción de gas por pozo
+-- Average gas production per well
 SELECT AVG(total_gas) AS avg_gas_per_well
 FROM (
     SELECT year_month, SUM(production) AS total_gas
     FROM gas_production
     GROUP BY year_month
 );
+-- Bonus: Oil and gas production by year
+SELECT
+    product,
+    year,
+    total_volume,
+    LAG(total_volume) OVER (PARTITION BY product ORDER BY year) AS prev_year_volume,
+    ROUND(
+        (CAST(total_volume AS REAL) - LAG(total_volume) OVER (PARTITION BY product ORDER BY year)) 
+        / LAG(total_volume) OVER (PARTITION BY product ORDER BY year) * 100, 2
+    ) AS yoy_change_percent
+FROM (
+    SELECT
+        'Oil' AS product,
+        strftime('%Y', year_month) AS year,
+        SUM(production) AS total_volume
+    FROM oil_production
+    WHERE county = 'WV'
+    GROUP BY year
+    UNION ALL
+    SELECT
+        'Gas' AS product,
+        strftime('%Y', year_month) AS year,
+        SUM(production) AS total_volume
+    FROM gas_production
+    WHERE county = 'WV'
+    GROUP BY year
+)
+ORDER BY product, year;
