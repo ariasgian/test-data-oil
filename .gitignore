@@ -1,0 +1,5 @@
+*.pyc
+*.csv
+*.db
+produccion_petrolera.db
+*.geojson
