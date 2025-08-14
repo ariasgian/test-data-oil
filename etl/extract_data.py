@@ -5,6 +5,9 @@ import zipfile
 from io import BytesIO
 
 class DataExtractor:
+    
+        
+        
     def get_dataframe(self, url: str, sheet_name: str, skiprows: int) -> pd.DataFrame:
         df = pd.read_excel(url, sheet_name=sheet_name, skiprows=skiprows, engine='openpyxl')
         # Reemplaza saltos de línea en los nombres de las columnas por espacios        
@@ -25,16 +28,25 @@ class DataExtractor:
                 df = df[columns]
             # Renombrar columnas
             rename_dict = {
-                'API_WellNo': 'ID',
-                'Surface_location': 'location',
+                'API_WellNo': 'id',
+                'Well_Status': 'location',
                 'Operator_number': 'operator',
-                'Well_Status': 'status'
+                'Completion': 'status',
+                'Surface_Longitude': 'longitude',
+                'Surface_latitude': 'latitude'
             }
             df = df.rename(columns=rename_dict)
             # Unificar coordenadas
-            if 'Surface_Longitude' in df.columns and 'Surface_latitude' in df.columns:
-                df['coordinates'] = df['Surface_Longitude'].astype(str) + ',' + df['Surface_latitude'].astype(str)
-                df = df.drop(['Surface_Longitude', 'Surface_latitude'], axis=1)
+            # if 'Surface_Longitude' in df.columns and 'Surface_latitude' in df.columns:
+            #     df['coordinates'] = df['Surface_Longitude'].astype(str) + ',' + df['Surface_latitude'].astype(str)
+            #     df = df.drop(['Surface_Longitude', 'Surface_latitude'], axis=1)
+        return df
+    def transform_columns(self, df) -> pd.DataFrame:
+        df['month'] = pd.to_datetime(df['month'], errors='coerce')
+        
+        return df
+    def drop_outliers(self, df: pd.DataFrame) -> pd.DataFrame:
+        df = df[(df['longitude'] != 0) & (df['latitude'] != 0)]
         return df
 
 extractor = DataExtractor()
