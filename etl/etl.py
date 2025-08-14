@@ -148,12 +148,50 @@ def normalize_data():
     print("Normalizando datos gas...")
     
     # Eliminar outliers de coordenadas
+    input_path = Path('geo')
     df_wells = pd.read_csv(input_path / 'wells_by_county.csv',low_memory=False)
     df_wells = ed.DataExtractor().drop_outliers(df_wells)
     df_wells.to_csv(output_path / 'wells_by_county.csv', index=False)
     print("Outliers de coordenadas eliminados.")
     
-    
+def ingest_all_data():
+    """Lee los tres archivos CSV procesados y los ingesta en la base de datos SQLite."""
+    print("\n--- INGESTANDO TODOS LOS DATOS PROCESADOS ---")
+    processed_path = Path('data') / 'processed'
+    files = ['oil_production.csv', 'gas_production.csv', 'wells_by_county.csv']
+    conn = None
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        cursor.execute('PRAGMA foreign_keys = ON;')
+
+        # Ingestar oil_production.csv
+        oil_df = pd.read_csv(processed_path / files[0])
+        if not oil_df.empty:
+            oil_df.to_sql('oil_production', conn, if_exists='append', index=False)
+            print(f"{len(oil_df)} registros de oil_production cargados.")
+
+        # Ingestar gas_production.csv
+        gas_df = pd.read_csv(processed_path / files[1])
+        if not gas_df.empty:
+            gas_df.to_sql('gas_production', conn, if_exists='append', index=False)
+            print(f"{len(gas_df)} registros de gas_production cargados.")
+
+        # Ingestar wells_by_county.csv
+        wells_df = pd.read_csv(processed_path / files[2])
+        if not wells_df.empty:
+            wells_df.to_sql('wells_by_county', conn, if_exists='append', index=False)
+            print(f"{len(wells_df)} registros de wells_by_county cargados.")
+
+        conn.commit()
+        print("✅ Ingesta de todos los datos completada.")
+    except Exception as e:
+        print(f"❌ ERROR en ingest_all_data: {e}")
+        if conn:
+            conn.rollback()
+    finally:
+        if conn:
+            conn.close()
 
 def main():
     """Función principal que orquesta el pipeline ETL."""
@@ -169,6 +207,8 @@ def main():
     # if production_df is not None and not production_df.empty:
     normalize_data()
     
+    #Paso 4: Ingestar todos los datos procesados
+    ingest_all_data()
     # print("\n====== PIPELINE ETL FINALIZADO EXITOSAMENTE ======")
 
 
