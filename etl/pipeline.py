@@ -1,7 +1,10 @@
 """
 ETL pipeline for oil and gas production data.
 
-This module provides functions to set up a SQLite database, extract and normalize oil, gas, and well data from external sources, ingest the processed data into the database, and perform geospatial queries and exports. The pipeline is designed for automated data processing and analysis of oil and gas production in the United States.
+This module provides functions to set up a SQLite database, extract and normalize oil, gas, 
+and well data from external sources, ingest the processed data into the database, 
+and perform geospatial queries and exports. The pipeline is designed for automated data processing 
+and analysis of oil and gas production in the United States.
 
 Functions:
     setup_database: Initializes the database schema.
@@ -16,8 +19,8 @@ Functions:
 import sqlite3
 import json
 import os
-import pandas as pd
 from pathlib import Path
+import pandas as pd
 import extract_data as ed
 
 
