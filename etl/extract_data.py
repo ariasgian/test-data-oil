@@ -5,9 +5,6 @@ import zipfile
 from io import BytesIO
 
 class DataExtractor:
-    
-        
-        
     def get_dataframe(self, url: str, sheet_name: str, skiprows: int) -> pd.DataFrame:
         df = pd.read_excel(url, sheet_name=sheet_name, skiprows=skiprows, engine='openpyxl')
         # Reemplaza saltos de línea en los nombres de las columnas por espacios        
@@ -43,13 +40,11 @@ class DataExtractor:
         return df
     def transform_columns(self, df) -> pd.DataFrame:
         df['year_month'] = pd.to_datetime(df['year_month'], errors='coerce')
-        
         return df
     def drop_outliers(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df[(df['longitude'] != 0) & (df['latitude'] != 0)]
         df = df.dropna(subset=['longitude', 'latitude'])
         return df
-
 extractor = DataExtractor()
 def get_production(url: str, sheet_configs: list) -> pd.DataFrame:
     """
