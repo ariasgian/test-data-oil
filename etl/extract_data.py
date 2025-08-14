@@ -12,9 +12,9 @@ class DataExtractor:
         df = pd.read_excel(url, sheet_name=sheet_name, skiprows=skiprows, engine='openpyxl')
         # Reemplaza saltos de línea en los nombres de las columnas por espacios        
         df = df.iloc[:, [0, 2]]
-        df.columns = ['month', 'production']
+        df.columns = ['year_month', 'production']
         # Agrega columna con el nombre del estado
-        df['State'] = sheet_name
+        df['county'] = sheet_name
         return df
     def download_and_extract_csv(self, zip_url: str, extract_to: Path, csv_filename: str, columns: list = None) -> pd.DataFrame:
         response = requests.get(zip_url)
@@ -29,7 +29,7 @@ class DataExtractor:
             # Renombrar columnas
             rename_dict = {
                 'API_WellNo': 'id',
-                'Well_Status': 'location',
+                'Well_Status': 'county',
                 'Operator_number': 'operator',
                 'Completion': 'status',
                 'Surface_Longitude': 'longitude',
@@ -42,11 +42,12 @@ class DataExtractor:
             #     df = df.drop(['Surface_Longitude', 'Surface_latitude'], axis=1)
         return df
     def transform_columns(self, df) -> pd.DataFrame:
-        df['month'] = pd.to_datetime(df['month'], errors='coerce')
+        df['year_month'] = pd.to_datetime(df['year_month'], errors='coerce')
         
         return df
     def drop_outliers(self, df: pd.DataFrame) -> pd.DataFrame:
         df = df[(df['longitude'] != 0) & (df['latitude'] != 0)]
+        df = df.dropna(subset=['longitude', 'latitude'])
         return df
 
 extractor = DataExtractor()
