@@ -6,13 +6,10 @@ from pathlib import Path
 
 # --- CONFIGURACIÓN ---
 DB_FILE = 'produccion_petrolera.db'
-SCHEMA_FILE = Path('sql') /'schema.sql'
-EIA_URL = 'https://www.eia.gov/petroleum/production/xls/crude-oil-natural-gas.xlsx'
-STATES_TO_FILTER = ['West Virginia', 'Pennsylvania']
-
 
 def setup_database():
     """Crea las tablas de la base de datos ejecutando el DDL del schema.sql."""
+    SCHEMA_FILE = Path('sql') /'schema.sql'
     print("--- 1. INICIANDO SETUP DE LA BASE DE DATOS ---")
     if os.path.exists(DB_FILE):
         os.remove(DB_FILE)
@@ -39,8 +36,6 @@ def setup_database():
     finally:
         if conn:
             conn.close()
-
-
 def extract_data_from_source():
     """Extrae datos de la URL de la EIA y los devuelve como un DataFrame."""
     print("\n--- 2. INICIANDO EXTRACCIÓN DE DATOS ---")
@@ -64,7 +59,6 @@ def extract_data_from_source():
     except Exception as e:
         print(f"❌ ERROR en extract_data_from_source: {e}")
         raise
-
 def normalize_data():
     transform_columns = ed.DataExtractor().transform_columns
     #convertir columnas de fecha y eliminar outliers
