@@ -58,7 +58,7 @@ def extract_data_from_source():
             ['API_WellNo', 'Surface_location', 'Operator_number', 'Well_Status', 'Surface_Longitude', 'Surface_latitude']
         )
         # Guarda el DataFrame transformado y filtrado
-        output = Path('geo') / 'wellspublic_filtered.csv'
+        output = Path('geo') / 'wells_by_country.csv'
         df_wells.to_csv(output, index=False)
         print(f"✅ Extracción completada. ")
     except Exception as e:
