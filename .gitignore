@@ -2,5 +2,4 @@
 *.csv
 *.db
 produccion_petrolera.db
-data/raw/gas_production.csv
-data/raw/oil_production.csv
+
