@@ -6,7 +6,7 @@ from pathlib import Path
 
 # --- CONFIGURACIÓN ---
 DB_FILE = 'produccion_petrolera.db'
-SCHEMA_FILE = 'schema.sql'
+SCHEMA_FILE = Path('sql') /'schema.sql'
 EIA_URL = 'https://www.eia.gov/petroleum/production/xls/crude-oil-natural-gas.xlsx'
 STATES_TO_FILTER = ['West Virginia', 'Pennsylvania']
 
@@ -53,12 +53,12 @@ def extract_data_from_source():
         print("Descargando y extrayendo datos de pozos...")        
         df_wells = extractor.download_and_extract_csv(
             'https://www.dec.ny.gov/fs/data/wellDOS.zip',
-            Path('geo'),
+            Path('data') / 'raw',
             'wellspublic.csv',
-            ['API_WellNo', 'Surface_location', 'Operator_number', 'Well_Status', 'Surface_Longitude', 'Surface_latitude']
+            ['API_WellNo', 'Well_Status', 'Operator_number',  'Completion','Surface_Longitude', 'Surface_latitude']
         )
         # Guarda el DataFrame transformado y filtrado
-        output = Path('geo') / 'wells_by_country.csv'
+        output = Path('geo') / 'wells_by_county.csv'
         df_wells.to_csv(output, index=False)
         print(f"✅ Extracción completada. ")
     except Exception as e:
@@ -130,21 +130,44 @@ def transform_and_load_data(df):
     finally:
         if conn:
             conn.close()
-
+def normalize_data():
+    transform_columns = ed.DataExtractor().transform_columns
+    #convertir columnas de fecha y eliminar outliers
+    input_path = Path('data') / 'raw'
+    output_path = Path('data') / 'processed'
+    file = 'oil_production.csv'
+    df = pd.read_csv(input_path / file, low_memory=False)
+    df= transform_columns(df)
+    df.to_csv(output_path / file, index=False)
+    print("Normalizando datos oil...")
+    
+    file = 'gas_production.csv'
+    df = pd.read_csv(input_path / file, low_memory=False)
+    df = transform_columns(df)
+    df.to_csv(output_path / file, index=False)
+    print("Normalizando datos gas...")
+    
+    # Eliminar outliers de coordenadas
+    df_wells = pd.read_csv(input_path / 'wells_by_county.csv',low_memory=False)
+    df_wells = ed.DataExtractor().drop_outliers(df_wells)
+    df_wells.to_csv(output_path / 'wells_by_county.csv', index=False)
+    print("Outliers de coordenadas eliminados.")
+    
+    
 
 def main():
     """Función principal que orquesta el pipeline ETL."""
     print("====== INICIANDO PIPELINE ETL DE PRODUCCIÓN DE PETRÓLEO ======")
     
     # Paso 1: Crear la estructura de la base de datos
-    # setup_database()
+    setup_database()
     
     # Paso 2: Extraer los datos de la fuente
     extract_data_from_source()
     
     # Paso 3: Transformar y cargar los datos en la base de datos
     # if production_df is not None and not production_df.empty:
-    #     transform_and_load_data(production_df)
+    normalize_data()
     
     # print("\n====== PIPELINE ETL FINALIZADO EXITOSAMENTE ======")
 
