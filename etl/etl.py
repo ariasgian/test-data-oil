@@ -58,78 +58,13 @@ def extract_data_from_source():
             ['API_WellNo', 'Well_Status', 'Operator_number',  'Completion','Surface_Longitude', 'Surface_latitude']
         )
         # Guarda el DataFrame transformado y filtrado
-        output = Path('geo') / 'wells_by_county.csv'
+        output = Path('geo') / 'wellspublic.csv'
         df_wells.to_csv(output, index=False)
         print(f"✅ Extracción completada. ")
     except Exception as e:
         print(f"❌ ERROR en extract_data_from_source: {e}")
         raise
 
-
-def transform_and_load_data(df):
-    """Transforma el DataFrame y carga los datos en la base de datos SQLite."""
-    print("\n--- 3. INICIANDO TRANSFORMACIÓN Y CARGA DE DATOS ---")
-    conn = None
-    try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-        cursor.execute('PRAGMA foreign_keys = ON;')
-
-        # --- TRANSFORMACIÓN Y CARGA DE DIMENSIONES ---
-        # Como los datos de origen no tienen operadores ni pozos, crearemos registros "dummy".
-        # Esta es una práctica común cuando los datos de origen y destino no coinciden 1 a 1.
-        
-        # 1. Cargar Operador por defecto
-        cursor.execute("INSERT OR IGNORE INTO operators (operator_name) VALUES (?)", ('Default Operator',))
-        operator_id = cursor.execute("SELECT operator_id FROM operators WHERE operator_name = ?", ('Default Operator',)).fetchone()[0]
-        print(f"Operador por defecto cargado con ID: {operator_id}")
-
-        # 2. Cargar Estados, Pozos "dummy" y mapearlos
-        state_well_map = {}
-        state_codes = {'West Virginia': 'WV', 'Pennsylvania': 'PA'}
-        
-        for state_name in df['State'].unique():
-            # Cargar estado
-            cursor.execute("INSERT OR IGNORE INTO states (state_name, state_code) VALUES (?, ?)", (state_name, state_codes.get(state_name, 'N/A')))
-            state_id = cursor.execute("SELECT state_id FROM states WHERE state_name = ?", (state_name,)).fetchone()[0]
-            
-            # Crear un pozo "agregado" para ese estado, ya que no tenemos datos a nivel de pozo
-            well_api = f"{state_codes.get(state_name)}-AGGREGATED-01"
-            cursor.execute("""
-                INSERT INTO wells (api_well_number, status, latitude, longitude, state_id, operator_id)
-                VALUES (?, 'Active', 0.0, 0.0, ?, ?)
-            """, (well_api, state_id, operator_id))
-            well_id = cursor.lastrowid
-            state_well_map[state_name] = well_id
-            print(f"Estado '{state_name}' (ID: {state_id}) y Pozo Ficticio (ID: {well_id}) cargados.")
-
-        # --- CARGA DE DATOS DE PRODUCCIÓN (TABLA DE HECHOS) ---
-        print("Cargando registros de producción...")
-        records_to_load = []
-        for index, row in df.iterrows():
-            well_id = state_well_map[row['State']]
-            # Transformar la fecha al formato YYYY-MM-01
-            prod_date = row['Month'].strftime('%Y-%m-01')
-            volume = row['Crude Oil Production (Thousand Barrels)']
-            
-            records_to_load.append((well_id, prod_date, 'Oil', volume, 'Thousand Barrels'))
-            
-        cursor.executemany("""
-            INSERT INTO production_volumes (well_id, production_date, product_type, volume, unit)
-            VALUES (?, ?, ?, ?, ?)
-        """, records_to_load)
-        
-        conn.commit()
-        print(f"✅ Carga de datos completada. {len(records_to_load)} registros de producción insertados.")
-        
-    except sqlite3.Error as e:
-        print(f"❌ ERROR en transform_and_load_data: {e}")
-        if conn:
-            conn.rollback() # Revertir cambios si hay un error
-        raise
-    finally:
-        if conn:
-            conn.close()
 def normalize_data():
     transform_columns = ed.DataExtractor().transform_columns
     #convertir columnas de fecha y eliminar outliers
@@ -149,16 +84,17 @@ def normalize_data():
     
     # Eliminar outliers de coordenadas
     input_path = Path('geo')
-    df_wells = pd.read_csv(input_path / 'wells_by_county.csv',low_memory=False)
+    output_path = Path('geo')
+    df_wells = pd.read_csv(input_path / 'wellspublic.csv',low_memory=False)
     df_wells = ed.DataExtractor().drop_outliers(df_wells)
-    df_wells.to_csv(output_path / 'wells_by_county.csv', index=False)
+    df_wells.to_csv(output_path / 'wellspublic.csv', index=False)
     print("Outliers de coordenadas eliminados.")
     
 def ingest_all_data():
     """Lee los tres archivos CSV procesados y los ingesta en la base de datos SQLite."""
     print("\n--- INGESTANDO TODOS LOS DATOS PROCESADOS ---")
     processed_path = Path('data') / 'processed'
-    files = ['oil_production.csv', 'gas_production.csv', 'wells_by_county.csv']
+    files = ['oil_production.csv', 'gas_production.csv', 'wellspublic.csv']
     conn = None
     try:
         conn = sqlite3.connect(DB_FILE)
@@ -176,9 +112,9 @@ def ingest_all_data():
         if not gas_df.empty:
             gas_df.to_sql('gas_production', conn, if_exists='append', index=False)
             print(f"{len(gas_df)} registros de gas_production cargados.")
-
-        # Ingestar wells_by_county.csv
-        wells_df = pd.read_csv(processed_path / files[2])
+        processed_path = Path('geo')
+        # Ingestar wellspublic.csv
+        wells_df = pd.read_csv(processed_path / 'wellspublic.csv' )
         if not wells_df.empty:
             wells_df.to_sql('wells_by_county', conn, if_exists='append', index=False)
             print(f"{len(wells_df)} registros de wells_by_county cargados.")
@@ -196,44 +132,68 @@ def geospatial_query():
     """Realiza una consulta geoespacial para obtener la ubicación de los pozos."""
     print("\n--- REALIZANDO CONSULTA GEOESPACIAL ---")
     conn = sqlite3.connect(DB_FILE)
-    cursor = conn.cursor()
-    
     query = """
-    SELECT w.api_well_number, w.status, w.latitude, w.longitude, s.state_name
-    FROM wells AS w
-    JOIN states AS s ON w.state_id = s.state_id
-    WHERE s.state_name IN (?, ?);
+        SELECT 
+            county, 
+            COUNT(*) AS well_count
+        FROM wells_by_county
+        group by county    
     """
-    
-    cursor.execute(query, (STATES_TO_FILTER[0], STATES_TO_FILTER[1]))
-    results = cursor.fetchall()
-    
-    if results:
-        print("Pozos encontrados:")
-        for row in results:
-            print(row)
-    else:
-        print("No se encontraron pozos en los estados especificados.")
-    
+    df = pd.read_sql_query(query, conn)
     conn.close()
+    return df
+def wells_to_geojson():
+    """Convierte el archivo wellspublic.csv en un GeoJSON."""
+    import json
+
+    input_path = Path('geo')  / 'wellspublic.csv'
+    output_path = Path('data') / 'processed' / 'wellspublic.geojson'
+    df = pd.read_csv(input_path)
+
+    features = []
+    for _, row in df.iterrows():        
+        feature = {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [row['longitude'], row['latitude']]
+            },
+            "properties": {k: row[k] for k in df.columns if k not in ['longitud', 'latitude']}
+        }
+        features.append(feature)
+
+    geojson = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+
+    with open(output_path, 'w') as f:
+        json.dump(geojson, f)
+    print(f"GeoJSON generado en {output_path}")
 def main():
     """Función principal que orquesta el pipeline ETL."""
     print("====== INICIANDO PIPELINE ETL DE PRODUCCIÓN DE PETRÓLEO ======")
     
-    # Paso 1: Crear la estructura de la base de datos
+    # Part 1-1
     setup_database()
+    print("Base de datos configurada correctamente.")
     
-    # Paso 2: Extraer los datos de la fuente
+    # Part 2: Extraer los datos de la fuente
+    print("\n--- INICIANDO ETAPA DE EXTRACCIÓN DE DATOS ---")
     extract_data_from_source()
-    
-    # Paso 3: Transformar y cargar los datos en la base de datos
-    # if production_df is not None and not production_df.empty:
     normalize_data()
-    
-    #Paso 4: Ingestar todos los datos procesados
     ingest_all_data()
-    # print("\n====== PIPELINE ETL FINALIZADO EXITOSAMENTE ======")
+    print("Datos procesados e ingeridos correctamente.")
 
-
+    #Part 4: Realizar consulta geoespacial
+    print("\n--- INICIANDO CONSULTA GEOESPACIAL ---")
+    df=geospatial_query()
+    df.to_csv(Path('data') / 'processed'/ 'wells_by_county.csv', index=False)
+    wells_to_geojson()
+    
+    print("Consulta geoespacial completada. Resultados mostrados.")
+    
+    print("\n====== PIPELINE ETL FINALIZADO EXITOSAMENTE ======")
+    
 if __name__ == '__main__':
     main()
