@@ -192,7 +192,30 @@ def ingest_all_data():
     finally:
         if conn:
             conn.close()
-
+def geospatial_query():
+    """Realiza una consulta geoespacial para obtener la ubicación de los pozos."""
+    print("\n--- REALIZANDO CONSULTA GEOESPACIAL ---")
+    conn = sqlite3.connect(DB_FILE)
+    cursor = conn.cursor()
+    
+    query = """
+    SELECT w.api_well_number, w.status, w.latitude, w.longitude, s.state_name
+    FROM wells AS w
+    JOIN states AS s ON w.state_id = s.state_id
+    WHERE s.state_name IN (?, ?);
+    """
+    
+    cursor.execute(query, (STATES_TO_FILTER[0], STATES_TO_FILTER[1]))
+    results = cursor.fetchall()
+    
+    if results:
+        print("Pozos encontrados:")
+        for row in results:
+            print(row)
+    else:
+        print("No se encontraron pozos en los estados especificados.")
+    
+    conn.close()
 def main():
     """Función principal que orquesta el pipeline ETL."""
     print("====== INICIANDO PIPELINE ETL DE PRODUCCIÓN DE PETRÓLEO ======")
